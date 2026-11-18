@@ -9,6 +9,8 @@ The block is West 317th Street, which does not exist. Rain from 02:30, the trash
 **Watch the night:** https://0xmlow.github.io/the-unsupervised-shift/ (the web version, `index.html`)
 Options: `?t=03:17` freezes a minute, `?speed=16`, `?clean` hides the text.
 
+**Walk the block:** https://n3wyorkers.com/shift-walk (three.js, first person, the whole night on the clock)
+
 | | |
 |---|---|
 | ![03:17](stills/west-317th-street_0317_the-cat-crosses.jpg) | ![07:13](stills/west-317th-street_0713_sun-in-the-slot.jpg) |
@@ -38,6 +40,10 @@ Every layer, named:
 - **Surfaces and props:** CC0 textures and models from Poly Haven, and textures generated with Adobe Firefly.
 - **Critique:** GPT-6 Astra (OpenAI) reviewed contact sheets three times; its notes are in `critique/`.
 - **Sound:** synthesised in code, no recordings.
+
+## The walk
+
+`walk/` is the code of the three.js walk. The street is Cycles light baked twice in Blender (03:17 night, 07:13 dawn) into atlases and blended by the clock; every window, shop, lamp, the signal, the sky, the rain and all 171 movers run live from `block.json`, and the wet road is drawn live from the lamps and the neon. `tools/web_bake.py` bakes and exports, `tools/web_encode.py` denoises and encodes, `tools/web_build.sh` makes the web assets, `tools/walkshot.mjs` photographs the walk in headless Chrome. The built assets (about 27 MB) are served from n3wyorkers.com, not kept here.
 
 ## What is not in this repo
 

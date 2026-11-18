@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>The Unsupervised Shift, on foot</title>
+<meta name="description" content="Walk West 317th Street from midnight to 8 a.m. One invented New York block by MLow, built in Blender and walked in the browser.">
+<style>
+:root{--ink:#0D0D0D;--cloud:#F0F4F8;--cyan:#00E5FF;--pink:#FF2E63;--acid:#D7FF1F}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#000;color:var(--cloud);font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;overflow:hidden;overscroll-behavior:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+#hud{position:fixed;left:16px;top:12px;pointer-events:none;text-shadow:0 1px 6px #000}
+#clock{font-size:40px;font-weight:700;letter-spacing:1px;line-height:1}#sub{opacity:.75;margin-top:4px}
+#ctl{position:fixed;right:12px;top:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:56vw}
+#moments{position:fixed;right:12px;top:52px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:56vw}
+button,a.b{font:inherit;color:var(--cloud);background:rgba(13,13,13,.62);border:1px solid rgba(240,244,248,.35);padding:5px 9px;border-radius:3px;cursor:pointer;text-decoration:none}
+button:hover,button.on,a.b:hover{border-color:var(--acid);color:var(--acid)}
+#moments button{font-size:11px;padding:3px 7px;opacity:.85}
+#log{position:fixed;left:16px;bottom:58px;max-width:min(640px,calc(100vw - 32px));pointer-events:none;background:rgba(13,13,13,.6);padding:6px 9px;border-radius:3px}
+#log:empty{display:none}#log div{opacity:.4}#log div:last-child{opacity:1}#log b{color:var(--acid);font-weight:400}
+#scrub{position:fixed;left:16px;right:16px;bottom:18px;width:calc(100vw - 32px);accent-color:var(--acid)}
+#cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(240,244,248,.7);pointer-events:none}
+#tip{position:fixed;left:50%;top:calc(50% + 16px);transform:translateX(-50%);max-width:min(380px,86vw);background:rgba(13,13,13,.86);border:1px solid var(--cyan);padding:7px 10px;border-radius:3px;pointer-events:none;opacity:0;transition:opacity .25s;text-align:center}
+#tip b{color:var(--cyan);font-weight:400}
+#help{position:fixed;left:16px;top:86px;opacity:.6;font-size:11px;pointer-events:none;max-width:44vw}
+#stick{position:fixed;width:80px;height:80px;border:1px solid rgba(240,244,248,.5);border-radius:50%;display:none;pointer-events:none}
+#loading{position:fixed;inset:0;background:#05070a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:20;transition:opacity .8s}
+#loading.done{opacity:0;pointer-events:none}#loading h1{font-size:18px;font-weight:400;letter-spacing:.2em;margin:0}
+#bar{width:min(320px,70vw);height:2px;background:rgba(240,244,248,.15)}#bar-in{height:100%;width:0;background:var(--acid);transition:width .3s}
+#loading p{opacity:.6;max-width:min(520px,86vw);text-align:center;margin:0}
+@media (max-width:700px){#clock{font-size:28px}#sub{font-size:11px;max-width:52vw}#help,#moments{display:none}#ctl{max-width:46vw;gap:4px}#ctl button,#ctl a.b{padding:4px 6px;font-size:11px}#log{bottom:46px;font-size:11px;max-height:3.2em;overflow:hidden}#log div{display:none}#log div:last-child{display:block}}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+</head><body>
+<canvas id="c"></canvas>
+<div id="hud"><div id="clock">03:16:30</div><div id="sub">West 317th Street · Wednesday, November 18, 2026</div></div>
+<div id="help">Click to look around. W A S D to walk, Shift to run. Space pauses the clock. Look at a window to see who lives there.</div>
+<div id="ctl"><button id="play">pause</button><a class="b" id="nb" href="/shift" target="_top">the piece</a></div>
+<div id="moments"></div>
+<div id="log"></div>
+<input id="scrub" type="range" min="0" max="480" step="0.01" value="196.5" aria-label="Time of night">
+<div id="cross"></div><div id="tip"></div><div id="stick"></div>
+<div id="loading"><h1>WEST 317TH STREET</h1><div id="bar"><div id="bar-in"></div></div><p>Loading the block: the street baked twice in Blender, the windows, the cars, and everyone out tonight.</p></div>
+<script type="module" src="walk.js"></script>
+</body></html>

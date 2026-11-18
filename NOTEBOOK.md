@@ -448,3 +448,13 @@ Then MLow asked for it on n3wyorkers.com too. Framed inside a page there, the ni
 ## 11:18 Nov 18  (after the shift)  On n3wyorkers.com
 
 The block has a page on the NEW YORKERS site: n3wyorkers.com/shift, under MORE in the nav and in the footer. The night plays in a frame at the top, then the three finals, then every layer named. Live build 20261118-161626. The mlow.xyz Lab card now opens it. Building the page put the generic share card back on pigeon.html and agents.html (a known trap there: any builder run after the share cards); build_og.py put them right before the upload.
+
+## 12:45 Nov 18  (after the shift)  On foot
+
+MLow asked what about a walkable three.js world, I said there was none, and he said build it. It is at n3wyorkers.com/shift-walk, files in `walk/`.
+
+The street is not lit by three.js. Blender bakes it twice, 03:17 and 07:13, Cycles colour times light into six atlases a state (44 minutes at 96 samples), and the walk blends the two as the sky turns. Everything that changes is live from block.json: every window, the shops, the lamps going off at 06:34, the signal, the sky and the sun, the rain from 02:12, the trash until the truck takes it, and all 171 movers, his cast walking their own routes with their own walk clips. Look at a window and it tells you who lives there.
+
+What I changed my mind about on the way. The road and the ground under the far city were each one plane running far past the block, so they got sixteen pixels a metre in the first atlas list; I stopped that bake after a minute and cut the planes at the block's edge. 1,232 prop copies drew 3.7 million triangles a frame; the build now gives the trash bags and the fruit 350 triangles each. The first look was a stop and a half too bright and flat against the 03:17 final, because three's AgX has no Medium High Contrast look: the walk runs 1.3 stops under Blender's exposure. The bake is diffuse only, so the wet road came out matte; the lamps and the neon on the asphalt are drawn live now, first far too strong (the whole road glowed), then as streaks.
+
+Weak: walls are soft up close (24 pixels a metre), surfaces right under a lamp clip to white, and the cast is lit by six point lights and the sky, not by the bake, so it sits a little apart from the street. Not measured on a real phone.
