@@ -21,7 +21,7 @@ const v3 = (x, y, z) => new THREE.Vector3(x, z, -y);        // block coordinates
 // ---------------------------------------------------------------- renderer
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !PHONE, powerPreference: 'high-performance' }); }
-catch (e) { document.querySelector('#loading p').innerHTML = 'This browser has 3D graphics (WebGL) switched off, so the walk cannot run here. <a href="/shift" target="_top" style="color:#D7FF1F">Watch the night on the flat page instead.</a>'; throw e; }
+catch (e) { document.querySelector('#loading p').innerHTML = 'This browser is not giving the page any 3D graphics (WebGL), so the walk cannot start.<br><br>In Chrome: Settings, System, turn on <b>Use graphics acceleration when available</b>, then Relaunch. If it is already on, quit Chrome fully and open it again. Safari on a Mac runs it as it is.<br><br><a href="/shift" target="_top" style="color:#D7FF1F">Or watch the night on the flat page.</a>'; throw e; }
 renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.5 : 2));
 renderer.toneMapping = THREE.AgXToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
