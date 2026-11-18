@@ -242,7 +242,7 @@ function applyTime() {
   for (const [im, i, pile, m] of PILE_INST) { const p = D.piles[pile]; im.setMatrixAt(i, (p && p.appear <= t && t < p.gone) ? m : ZERO); im.instanceMatrix.needsUpdate = true; }
   for (const [o, s] of SIL) o.visible = s.a <= t && (t < s.b || (t >= END && s.b >= END));
   rain.visible = raining(t);
-  wetMat.uniforms.wet.value = 0.25 + 0.75 * wetness(t); wetMat.uniforms.sky.value.setRGB(...h);
+  wetMat.uniforms.wet.value = (0.25 + 0.75 * wetness(t)) * (1 - 0.85 * k);     // the streaks fade as the sun comes up wetMat.uniforms.sky.value.setRGB(...h);
   SPEC.forEach((s, i) => { const lv = s.lamp ? (lo ? 4 : 0) : (shopLevel(s.shop, t) >= 0.5 ? 0.45 : 0); wetMat.uniforms.lc.value[i].set(s.c[0] * lv, s.c[1] * lv, s.c[2] * lv); });
   cityMat.color.setRGB(0.006 + h[0] * 0.55, 0.007 + h[1] * 0.55, 0.01 + h[2] * 0.55);
   if (Math.abs(t - lastPaint) > 1 / 60) { paintWindows(t); lastPaint = t; }
