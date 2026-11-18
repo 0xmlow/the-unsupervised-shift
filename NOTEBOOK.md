@@ -444,3 +444,7 @@ MLow asked to wire the piece up to the site and add it to GitHub. This is the fi
 ## 11:14 Nov 18  (after the shift)  A night that never started
 
 Then MLow asked for it on n3wyorkers.com too. Framed inside a page there, the night stayed black at 00:00. The browser stamped the first frame earlier than the moment the script started, so the first step of time was negative, the clock went below midnight and the sky lookup threw on every frame after. Full screen it had always been lucky. The step can no longer go below zero (build_web.py). The fix goes to the drive, GitHub and the site together.
+
+## 11:18 Nov 18  (after the shift)  On n3wyorkers.com
+
+The block has a page on the NEW YORKERS site: n3wyorkers.com/shift, under MORE in the nav and in the footer. The night plays in a frame at the top, then the three finals, then every layer named. Live build 20261118-161626. The mlow.xyz Lab card now opens it. Building the page put the generic share card back on pigeon.html and agents.html (a known trap there: any builder run after the share cards); build_og.py put them right before the upload.
