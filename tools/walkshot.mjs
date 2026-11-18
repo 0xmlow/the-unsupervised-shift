@@ -18,7 +18,7 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PROFILE = join(out, '_chrome'); mkdirSync(out, { recursive: true });
 const port = 9300 + Math.floor(Math.random() * 500);
 const chrome = spawn(CHROME, ['--headless=new', '--hide-scrollbars', '--mute-audio', `--remote-debugging-port=${port}`, `--user-data-dir=${PROFILE}`,
-  `--window-size=${W},${H}`, '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', 'about:blank'], { stdio: 'ignore' });
+  `--window-size=${W},${H}`, ...(process.env.NOGL ? ['--disable-webgl', '--disable-webgl2', '--disable-3d-apis'] : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']), 'about:blank'], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const done = c => { try { chrome.kill('SIGKILL'); } catch {} try { rmSync(PROFILE, { recursive: true, force: true }); } catch {} process.exit(c); };
 let target; for (let i = 0; i < 100 && !target; i++) { try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch {} if (!target) await sleep(150); }

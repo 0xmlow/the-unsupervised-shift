@@ -21,7 +21,10 @@ const v3 = (x, y, z) => new THREE.Vector3(x, z, -y);        // block coordinates
 // ---------------------------------------------------------------- renderer
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !PHONE, powerPreference: 'high-performance' }); }
-catch (e) { document.querySelector('#loading p').innerHTML = 'This browser is not giving the page any 3D graphics (WebGL), so the walk cannot start.<br><br>In Chrome: Settings, System, turn on <b>Use graphics acceleration when available</b>, then Relaunch. If it is already on, quit Chrome fully and open it again. Safari on a Mac runs it as it is.<br><br><a href="/shift" target="_top" style="color:#D7FF1F">Or watch the night on the flat page.</a>'; throw e; }
+catch (e) {        // no WebGL here: the photographed walk instead (pano.js), the same block in 360 at five moments
+  document.querySelector('#loading p').textContent = 'No WebGL in this browser: loading the photographed walk.';
+  try { await import('./pano.js'); } catch (e2) { document.querySelector('#loading p').innerHTML = 'This browser could not load the walk. <a href="/shift" target="_top" style="color:#D7FF1F">Watch the night on the flat page.</a>'; }
+  throw e; }
 renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.5 : 2));
 renderer.toneMapping = THREE.AgXToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
@@ -242,7 +245,8 @@ function applyTime() {
   for (const [im, i, pile, m] of PILE_INST) { const p = D.piles[pile]; im.setMatrixAt(i, (p && p.appear <= t && t < p.gone) ? m : ZERO); im.instanceMatrix.needsUpdate = true; }
   for (const [o, s] of SIL) o.visible = s.a <= t && (t < s.b || (t >= END && s.b >= END));
   rain.visible = raining(t);
-  wetMat.uniforms.wet.value = (0.25 + 0.75 * wetness(t)) * (1 - 0.85 * k);     // the streaks fade as the sun comes up wetMat.uniforms.sky.value.setRGB(...h);
+  wetMat.uniforms.wet.value = (0.25 + 0.75 * wetness(t)) * (1 - 0.85 * k);     // the streaks fade as the sun comes up
+  wetMat.uniforms.sky.value.setRGB(...h);
   SPEC.forEach((s, i) => { const lv = s.lamp ? (lo ? 4 : 0) : (shopLevel(s.shop, t) >= 0.5 ? 0.45 : 0); wetMat.uniforms.lc.value[i].set(s.c[0] * lv, s.c[1] * lv, s.c[2] * lv); });
   cityMat.color.setRGB(0.006 + h[0] * 0.55, 0.007 + h[1] * 0.55, 0.01 + h[2] * 0.55);
   if (Math.abs(t - lastPaint) > 1 / 60) { paintWindows(t); lastPaint = t; }
@@ -348,4 +352,24 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__walk = { THREE, MV, get t() { return t; }, set t(v) { t = v; lastPaint = -1; }, camera, renderer, scene, render: () => { applyTime(); placeMovers(0); renderer.render(scene, camera); }, setView(x, y, yw, pt) { camera.position.copy(v3(x, y, 1.62 + ((Math.abs(y) > ROAD) ? GROUND : 0))); yaw = yw; pitch = pt || 0; camera.rotation.set(pitch, yaw, 0); } };
+// a 360 photograph of where you stand, for the no-WebGL version of the walk (tools/panos.mjs calls it headless)
+async function pano(W = 2048) {
+  const H = W / 2, rt = new THREE.WebGLCubeRenderTarget(1024, { type: THREE.HalfFloatType });
+  const cc = new THREE.CubeCamera(0.08, 2500, rt); cc.position.copy(camera.position); scene.add(cc);
+  applyTime(); placeMovers(0); skyDome.position.copy(camera.position); cc.update(renderer, scene); scene.remove(cc);
+  const m = new THREE.ShaderMaterial({ uniforms: { cube: { value: rt.texture } }, depthTest: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `uniform samplerCube cube; varying vec2 vUv;
+      void main(){ float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.1415927;
+        vec3 d = vec3(sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat)); gl_FragColor = vec4(textureCube(cube, d).rgb, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` });
+  const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m), qs = new THREE.Scene(); qs.add(q);
+  const keep = renderer.getSize(new THREE.Vector2()), pr = renderer.getPixelRatio();
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false); renderer.render(qs, new THREE.Camera());
+  const url = renderer.domElement.toDataURL('image/jpeg', 0.72);
+  renderer.setPixelRatio(pr); renderer.setSize(keep.x, keep.y, false); rt.dispose(); m.dispose();
+  return url;
+}
+window.__walk = { THREE, MV, pano, get t() { return t; }, set t(v) { t = v; lastPaint = -1; }, camera, renderer, scene, render: () => { applyTime(); placeMovers(0); renderer.render(scene, camera); }, setView(x, y, yw, pt) { camera.position.copy(v3(x, y, 1.62 + ((Math.abs(y) > ROAD) ? GROUND : 0))); yaw = yw; pitch = pt || 0; camera.rotation.set(pitch, yaw, 0); } };
