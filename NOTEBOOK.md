@@ -436,3 +436,11 @@ The shelves were pastel blocks. They now hold facings of real kinds of stock: bo
 I did not touch the storefront light this round. Astra's third note asks for the light to come from fixtures you can see; in these shops it already does (the ceiling panels and the neon), and changing it without a reason I can point at would be guessing.
 
 The finals were rendered again 06:19 to 06:21 (`_v7` is the 06:03 set). Still no film: MLow is editing.
+
+## 11:11 Nov 18  (after the shift)  On the site and on GitHub
+
+MLow asked to wire the piece up to the site and add it to GitHub. This is the first time any of it leaves the drive. Public repo 0xmlow/the-unsupervised-shift: the generators, tools, the notebook and the other notes, the web page, the three finals as JPEG, the contact sheet, the Astra critiques, the sound and the two older films. No render assets (his cast and cars, the CC0 and Firefly textures) and no film frames. Its README names every layer, Claude, Tripo, Poly Haven, Firefly and Astra included, because the old README's "Nothing was downloaded" stopped being true at 20:30. The web page plays at 0xmlow.github.io/the-unsupervised-shift. On mlow.xyz it is a Lab card (the 03:17 still, cropped) and the third entry under On GitHub. The film is still not rendered.
+
+## 11:14 Nov 18  (after the shift)  A night that never started
+
+Then MLow asked for it on n3wyorkers.com too. Framed inside a page there, the night stayed black at 00:00. The browser stamped the first frame earlier than the moment the script started, so the first step of time was negative, the clock went below midnight and the sky lookup threw on every frame after. Full screen it had always been lucky. The step can no longer go below zero (build_web.py). The fix goes to the drive, GitHub and the site together.

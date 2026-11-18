@@ -355,7 +355,7 @@ cv.addEventListener('pointerdown', e => { if ((D.L + 2 * MARG) * S > W) panDrag 
 // ---------- run
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;      // 11:14 Nov 18: a first frame stamped before the script ran gave a negative step, t went below zero and the sky lookup threw
   if (playing && !drag) { if (t < END) t = Math.min(END, t + dt * speed); else { hold += dt; if (hold > 6 && !q.has('once')) { t = 0; hold = 0; lastLog = -1; } } }
   if ((D.L + 2 * MARG) * S > W && panDrag == null && playing) { const span = (D.L + 2 * MARG) * S - W; pan = span * (0.5 - 0.5 * Math.cos(now / 9000)); layout(); }
   draw(); drawBar(); refreshLog(); refreshHud(); requestAnimationFrame(frame);
