@@ -42,6 +42,16 @@ while read m r; do
   if [ "$r" != "1.0" ]; then "$G" simplify "$f" /tmp/claude-501/_s.glb --ratio "$r" --error 0.02 >/dev/null; lean /tmp/claude-501/_s.glb "$A/props/$m.glb" 512; else lean "$f" "$A/props/$m.glb" 1024; fi
 done < /tmp/claude-501/_ratios.txt
 for f in "$BAKE"/cars/*.glb; do lean "$f" "$A/cars/$(basename "$f")" 1024; done
+# Nov 19: the cats and the rat are real models now (tools/animal_web.py: MLow's Tripo tabby, Poly Haven's CC0 street rat)
+"$B" -b --factory-startup --python "$HERE/tools/animal_web.py" -- /tmp/claude-501/_animals 2>&1 | grep -E "ANIMAL|Error" || true
+for k in cat rat; do "$G" resize /tmp/claude-501/_animals/$k.glb /tmp/claude-501/_a1.glb --width 512 --height 512 >/dev/null && "$G" simplify /tmp/claude-501/_a1.glb /tmp/claude-501/_a2.glb --ratio 0.35 --error 0.002 >/dev/null && "$G" webp /tmp/claude-501/_a2.glb /tmp/claude-501/_a3.glb --quality 84 >/dev/null && "$G" meshopt /tmp/claude-501/_a3.glb /tmp/claude-501/_animals/${k}_web.glb >/dev/null; done
+python3 - "$A/scene.json" "$A/cars" <<'PY2'
+import json, sys, shutil
+s, cars = sys.argv[1:]
+for m in json.load(open(s))['movers']:
+    if m.get('kind') in ('cat', 'rat') and m.get('veh'): shutil.copy2('/tmp/claude-501/_animals/%s_web.glb' % m['kind'], '%s/%s.glb' % (cars, m['veh'])); print('animal', m['veh'], m['kind'])
+PY2
+python3 "$HERE/tools/ticker.py" "$A"
 python3 - "$A/scene.json" "$CAST" "$A/cast" <<'PY'
 import json, sys, shutil, os
 s, src, dst = sys.argv[1:]; names = {m['cast'] for m in json.load(open(s))['movers'] if m.get('cast')}

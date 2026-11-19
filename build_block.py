@@ -1357,6 +1357,38 @@ def person_geo(g, col, r, umbrella=False, dogs=0, walk=False):
         for lx in (-0.25, 0.22): g.box(dc, dx + lx * sz, dy - 0.08 * sz, 0, dx + lx * sz + 0.06, dy + 0.08 * sz, 0.3 * sz)
         g.beam(IRON, (0.1, 0.25, h * 0.5), (dx, dy, 0.55 * sz), 0.008, 0.008)
 
+
+# 23:40 Nov 19, MLow: "the cats and dogs need to look more realistic so find better cc0 glbs". No realistic CC0 cat or
+# dog exists on Poly Haven or Sketchfab (checked: statues, skulls, catfish). The cat is MLow's own orange tabby (Tripo,
+# made for ONLY IN NEW YORK), the rat is Poly Haven's street_rat (CC0, Sean Buckley). Both face +x like the old shapes.
+ANIMAL_GLB = {'cat': ('assets/animals/cat_tabby_mlow_tripo.glb', 0.30, 'h'), 'rat': ('assets/animals/street_rat_polyhaven_cc0.glb', 0.24, 'l')}
+_ANIMAL_SRC = {}
+def glb_animal(kind, name):
+    path, size, axis = ANIMAL_GLB[kind]; path = os.path.join(HERE, path)
+    if not os.path.exists(path): return None
+    if kind not in _ANIMAL_SRC:
+        before = set(bpy.data.objects); bpy.ops.import_scene.gltf(filepath=path); new = [o for o in bpy.data.objects if o not in before]
+        ms = [o for o in new if o.type == 'MESH']; bpy.context.view_layer.update()
+        for o in ms: o.data = o.data.copy(); o.data.transform(o.matrix_world); o.parent = None; o.matrix_world = Matrix.Identity(4)
+        if len(ms) > 1:
+            bpy.ops.object.select_all(action='DESELECT')
+            for o in ms: o.select_set(True)
+            bpy.context.view_layer.objects.active = ms[0]; bpy.ops.object.join()
+        src = ms[0]
+        for o in new:
+            if o is not src and o.name in bpy.data.objects: bpy.data.objects.remove(o, do_unlink=True)
+        co = [v.co for v in src.data.vertices]; lo = Vector((min(c.x for c in co), min(c.y for c in co), min(c.z for c in co))); hi = Vector((max(c.x for c in co), max(c.y for c in co), max(c.z for c in co)))
+        d = hi - lo
+        if d.y > d.x * 1.3: src.data.transform(Matrix.Rotation(-math.pi / 2, 4, 'Z')); co = [v.co for v in src.data.vertices]; lo = Vector((min(c.x for c in co), min(c.y for c in co), min(c.z for c in co))); hi = Vector((max(c.x for c in co), max(c.y for c in co), max(c.z for c in co))); d = hi - lo
+        k = size / (d.z if axis == 'h' else max(d.x, d.y))
+        src.data.transform(Matrix.Translation(Vector((-(lo.x + hi.x) / 2, -(lo.y + hi.y) / 2, -lo.z))))
+        src.data.transform(Matrix.Scale(k, 4))
+        for p_ in src.data.polygons: p_.use_smooth = True
+        if src.name in scene.collection.objects: scene.collection.objects.unlink(src)
+        for c in list(src.users_collection): c.objects.unlink(src)
+        _ANIMAL_SRC[kind] = src
+    o = _ANIMAL_SRC[kind].copy(); o.name = name; scene.collection.objects.link(o); return o
+
 def cat_geo(g):
     c = colmat('cat', (0.75, 0.38, 0.08), 0.8)
     if R.ON:     # 04:24 Nov 18 (Astra: the cat was an ambiguous prop): a body you can read, 0.26 m at the shoulder, mid stride
@@ -1383,8 +1415,11 @@ def movers():
         e = bpy.data.objects.new('mover %03d %s' % (i, m['who']), None); scene.collection.objects.link(e); g = Geo(); lights = []
         k = m['kind']
         if k == 'person': person_geo(g, m['col'], r, m.get('umbrella', False), m.get('dogs', 0), walk=True)
-        elif k == 'cat': cat_geo(g)
-        elif k == 'rat': rat_geo(g)
+        elif k in ('cat', 'rat'):
+            ao = glb_animal(k, 'mover %d %s' % (i, k)) if R.ON else None
+            if ao: CAST_PENDING.append(ao)
+            elif k == 'cat': cat_geo(g)
+            else: rat_geo(g)
         else:
             if R.ON and k in ('car', 'cab'):      # 05:58: a model, with lamps you can see lit
                 o, ln = glb_car('car', m['col'], K.SEED + 900 + i, taxi=(k == 'cab'), name='mover %d' % i); CAST_PENDING.append(o); hx_ = ln / 2
@@ -1448,8 +1483,13 @@ def parked_cars():
 CATSIT = []
 def cat_in_window():
     g = Geo(); c = colmat('cat', (0.75, 0.38, 0.08), 0.8); F = street_frame(K.B['N1'])
-    p = F.p(2.2, -0.35, 0.64); g.blob(c, p[0], p[1], p[2] + 0.16, 0.13, 0.2, 0.17, 8, 5); g.blob(c, p[0], p[1] - 0.16, p[2] + 0.36, 0.085, 0.085, 0.08, 8, 5)
-    for dx in (-0.045, 0.045): g.box(c, p[0] + dx - 0.02, p[1] - 0.19, p[2] + 0.42, p[0] + dx + 0.02, p[1] - 0.15, p[2] + 0.48)
+    p = F.p(2.2, -0.35, 0.64); ao = glb_animal('cat', 'cat in window glb') if R.ON else None
+    if ao:          # sits on the crate looking out at the street
+        ao.location = p; CATSIT.append(ao)
+        fwd = Vector(F.p(2.2, -1.35, 0.64)) - Vector(p); ao.rotation_euler = (0, 0, math.atan2(fwd.y, fwd.x))
+    else:
+        g.blob(c, p[0], p[1], p[2] + 0.16, 0.13, 0.2, 0.17, 8, 5); g.blob(c, p[0], p[1] - 0.16, p[2] + 0.36, 0.085, 0.085, 0.08, 8, 5)
+        for dx in (-0.045, 0.045): g.box(c, p[0] + dx - 0.02, p[1] - 0.19, p[2] + 0.42, p[0] + dx + 0.02, p[1] - 0.15, p[2] + 0.48)
     F.box(colmat('crate', (0.75, 0.1, 0.05), 0.6), 1.8, -0.7, 0.17, 2.6, -0.1, 0.64, g)
     CATSIT.extend(g.flush('cat in window'))
 

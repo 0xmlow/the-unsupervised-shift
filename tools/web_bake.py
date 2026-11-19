@@ -27,6 +27,9 @@ TEST = '--test' in argv
 def opt(k, d): return type(d)(argv[argv.index(k) + 1]) if k in argv else d
 SAMPLES = opt('--samples', 16 if TEST else 96)
 DENSITY = opt('--density', 24.0)
+STREET = opt('--street', 0.0)          # Nov 19: texels per metre for the street level (below STREET_Z); 0 keeps one density
+STREET_Z = opt('--street-z', 7.0)
+PLAN = '--plan' in argv
 STATES = opt('--states', 'night,dawn').split(',')
 ATLAS = 1024 if TEST else 4096
 T_STATE = {'night': '03:17', 'dawn': '07:13'}
@@ -106,12 +109,33 @@ for o in list(bake):
         bmesh.ops.delete(bm, geom=kill, context='FACES'); bm.to_mesh(ob.data); bm.free()
     far.append(n)
 log('near %d, far %d' % (len(bake), len(far)))
+# Nov 19: MLow found the walls soft up close. Split the near block at STREET_Z: what you walk past gets STREET texels a metre.
+def split_z(o):
+    me = o.data; mw = o.matrix_world
+    lo = [(mw @ p.center).z < STREET_Z for p in me.polygons]
+    if all(lo): o['street'] = 1; return None
+    if not any(lo): return None
+    bm = bmesh.new(); bm.from_mesh(me); mwi = o.matrix_world.inverted()
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=mwi @ Vector((0, 0, STREET_Z)), plane_no=(mwi.to_3x3().transposed().inverted() @ Vector((0, 0, 1))).normalized(), clear_inner=False, clear_outer=False)
+    bm.to_mesh(me); bm.free()
+    n = o.copy(); n.data = me.copy(); n.name = o.name + ' high'; scene.collection.objects.link(n)
+    for ob, keep_lo in ((o, True), (n, False)):
+        bm = bmesh.new(); bm.from_mesh(ob.data); bm.faces.ensure_lookup_table()
+        kill = [f for f in bm.faces if ((mw @ f.calc_center_median()).z < STREET_Z) != keep_lo]
+        bmesh.ops.delete(bm, geom=kill, context='FACES'); bm.to_mesh(ob.data); bm.free()
+    o['street'] = 1; return n
+if STREET:
+    for o in list(bake):
+        n = split_z(o)
+        if n: bake.append(n)
+    log('street split: %d street pieces' % sum(1 for o in bake if o.get('street')))
 
 def area(o): return sum(p.area for p in o.data.polygons) * abs(o.matrix_world.determinant()) ** (2 / 3)
 def dens(o):
     n = o.name.lower()
     if 'roof' in n or 'tar' in n: return DENSITY * 0.25
     if 'inside' in n: return DENSITY * 0.6
+    if STREET and o.get('street'): return 24.0 if area(o) > 3000 else STREET     # the road itself stays at 24
     return DENSITY
 def pack(objs, dfun, tag, cap_px=ATLAS):
     cap = 0.6 * cap_px * cap_px
@@ -130,6 +154,7 @@ ATL['gates'] = gate_list
 if TEST: ATL = {k: v for k, v in list(ATL.items())[:2]}
 SIZE = {k: (ATLAS if k.startswith('n') else (2048 if not TEST else 512) if k.startswith('f') else (2048 if not TEST else 512)) for k in ATL}
 log('atlases', {k: (len(v), round(sum(area(o) for o in v))) for k, v in ATL.items()})
+if PLAN: log('plan only'); sys.exit(0)
 
 # ------------------------------------------------------------------ unwrap
 def unwrap(objs, size):

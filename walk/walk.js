@@ -6,11 +6,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const Q = new URLSearchParams(location.search);
 const PHONE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
 const BASE = window.WALK_BASE || ''; const A = BASE + 'assets/';
 const $ = id => document.getElementById(id);
+const V = window.WALK_V || '', VQ = V ? '?v=' + V : '';     // every asset carries the build version, so a new bake never meets an old cached file
+const ui = await (await import('./ui.js' + (V ? '?v=' + V : ''))).mountUI.bind(null);
 const END = 480, FAC = 9, ROAD = 5;
 const T = s => { const [h, m, sec] = s.split(':').map(Number); return h * 60 + m + (sec || 0) / 60; };
 const hm = t => { const m = Math.floor(t), s = Math.floor((t - m) * 60); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0') + ':' + String(s).padStart(2, '0'); };
@@ -20,28 +26,35 @@ const v3 = (x, y, z) => new THREE.Vector3(x, z, -y);        // block coordinates
 
 // ---------------------------------------------------------------- renderer
 let renderer;
-try { renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !PHONE, powerPreference: 'high-performance' }); }
+try { renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !PHONE, powerPreference: 'high-performance', preserveDrawingBuffer: true }); }
 catch (e) {        // no WebGL here: the photographed walk instead (pano.js), the same block in 360 at five moments
   document.querySelector('#loading p').textContent = 'No WebGL in this browser: loading the photographed walk.';
-  try { await import('./pano.js'); } catch (e2) { document.querySelector('#loading p').innerHTML = 'This browser could not load the walk. <a href="/shift" target="_top" style="color:#D7FF1F">Watch the night on the flat page.</a>'; }
+  try { await import('./pano.js' + (V ? '?v=' + V : '')); } catch (e2) { document.querySelector('#loading p').innerHTML = 'This browser could not load the walk. <a href="/shift" target="_top" style="color:#D7FF1F">Watch the night on the flat page.</a>'; }
   throw e; }
 renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.5 : 2));
 renderer.toneMapping = THREE.AgXToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(PHONE ? 70 : 62, 1, 0.08, 2500);
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+// Nov 19: bloom, so the neon, the lamps and the headlights glow the way a camera sees them (desktop only; ?nobloom)
+let composer = null, bloom = null;
+if (!PHONE && !Q.has('nobloom')) {
+  composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.42, 0.55, 1.15); composer.addPass(bloom); composer.addPass(new OutputPass());
+}
+const draw = () => composer ? composer.render() : renderer.render(scene, camera);
+function resize() { renderer.setSize(innerWidth, innerHeight, false); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); } camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-const load = url => new Promise((ok, no) => loader.load(url, ok, undefined, no));
+const load = url => new Promise((ok, no) => loader.load(url + VQ, ok, undefined, no));
 const texLoader = new THREE.TextureLoader();
-const tex = url => new Promise((ok, no) => texLoader.load(url, t => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, no));
+const tex = url => new Promise((ok, no) => texLoader.load(url + VQ, t => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, no));
 let loaded = 0, toLoad = 1;
 const bump = () => { loaded++; $('bar-in').style.width = Math.min(100, 100 * loaded / toLoad) + '%'; };
 
 // ---------------------------------------------------------------- the night, as data
-const D = await (await fetch(A + 'block.json')).json();
-const S = await (await fetch(A + 'scene.json')).json();
+const D = await (await fetch(A + 'block.json' + VQ)).json();
+const S = await (await fetch(A + 'scene.json' + VQ)).json();
 const shopLevel = (k, t) => { for (const [a, b, lv] of D.shops[k].lights) if ((a <= t && t < b) || (t >= END && b >= END)) return lv; return 0; };
 const gateDown = (k, t) => D.shops[k].gate.some(([a, b]) => (a <= t && t < b) || (t >= END && b >= END));
 function winLight(w, t) {
@@ -75,13 +88,24 @@ toLoad += 2 * atlasNames.length + 1;
 const street = await load(A + 'street.glb'); bump();
 const atlasMat = {};
 const SCALE = S.scales;
+// Nov 19: the bake is 24 to 48 texels a metre, soft at your feet. Photographed fine detail (Poly Haven asphalt_02 and
+// clay_plaster, CC0, high passed so only grain is left) multiplies in up close and fades out by 28 m.
+const detTex = url => new Promise(ok => texLoader.load(url + VQ, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 8; ok(t); }, undefined, () => ok(null)));
+const [DET_G, DET_W] = await Promise.all([detTex(A + 'ui/detail_ground.jpg'), detTex(A + 'ui/detail_wall.jpg')]);
+const DETAIL = !!(DET_G && DET_W) && !Q.has('nodetail');
 await Promise.all(atlasNames.map(async k => {
   const [n, d] = await Promise.all([tex(A + LMS + 'night_' + k + '.jpg').then(t => (bump(), t)), tex(A + LMS + 'dawn_' + k + '.jpg').then(t => (bump(), t))]);
   atlasMat[k] = new THREE.ShaderMaterial({
-    uniforms: { mapN: { value: n }, mapD: { value: d }, sN: { value: SCALE.night }, sD: { value: SCALE.dawn }, k: { value: 0 } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D mapN, mapD; uniform float sN, sD, k; varying vec2 vUv;
-      void main(){ vec3 a = texture2D(mapN, vUv).rgb * sN; vec3 b = texture2D(mapD, vUv).rgb * sD; gl_FragColor = vec4(mix(a, b, k), 1.0);
+    uniforms: { mapN: { value: n }, mapD: { value: d }, sN: { value: SCALE.night }, sD: { value: SCALE.dawn }, k: { value: 0 }, dG: { value: DET_G }, dW: { value: DET_W }, dOn: { value: DETAIL ? 1 : 0 } },
+    vertexShader: 'varying vec2 vUv; varying vec3 vW, vN; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `uniform sampler2D mapN, mapD, dG, dW; uniform float sN, sD, k, dOn; varying vec2 vUv; varying vec3 vW, vN;
+      void main(){ vec3 a = texture2D(mapN, vUv).rgb * sN; vec3 b = texture2D(mapD, vUv).rgb * sD; vec3 c = mix(a, b, k);
+        if (dOn > 0.5) { float dist = distance(vW, cameraPosition), f = 1.0 - smoothstep(5.0, 28.0, dist);
+          if (f > 0.0) { vec3 n = abs(normalize(cross(dFdx(vW), dFdy(vW)))); float g;
+            if (n.y > 0.7) g = (texture2D(dG, vW.xz * 0.42).r - 0.5) * 0.95;
+            else g = (texture2D(dW, (n.x > n.z ? vW.zy : vW.xy) * 0.6).r - 0.5) * 0.6;
+            c *= 1.0 + g * f; } }
+        gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       }`, side: THREE.DoubleSide,
@@ -273,7 +297,7 @@ camera.rotation.order = 'YXZ';
 let yaw = Q.has('yaw') ? +Q.get('yaw') : -Math.PI / 2, pitch = 0.04;
 camera.position.copy(v3(Q.has('x') ? +Q.get('x') : -4, Q.has('y') ? +Q.get('y') : 1.1, 1.62));
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { playing = !playing; syncUI(); e.preventDefault(); } if (e.code === 'KeyN') $('nb').click(); });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { playing = !playing; syncUI(); e.preventDefault(); }  });
 addEventListener('keyup', e => { keys[e.code] = false; });
 const cv = $('c');
 cv.addEventListener('click', () => { if (!PHONE && document.pointerLockElement !== cv) { try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} } });
@@ -307,37 +331,42 @@ const ray = new THREE.Raycaster(); ray.far = 45;
 let lookTick = 0;
 function lookAtWindow() {
   ray.setFromCamera({ x: 0, y: 0 }, camera); const h = ray.intersectObject(panes)[0];
-  const tip = $('tip');
-  if (!h) { tip.style.opacity = 0; return; }
+  if (!h) { U.setTip(null); return; }
   const p = S.panes[Math.floor(h.faceIndex / 2)], w = p && D.windows[p.w];
-  if (!w) { tip.style.opacity = 0; return; }
+  if (!w) { U.setTip(null); return; }
   const r = D.residents[w.unit], wl = winLight(w, t);
-  tip.innerHTML = `<b>${r.who}</b> · ${w.unit}, ${w.room}${wl ? '' : ' (dark)'}<br>${r.line}`; tip.style.opacity = 1;
+  U.setTip(`${r.who} · ${w.unit}, ${w.room}${wl ? '' : ' · dark'}`, r.line);
 }
 
-// ---------------------------------------------------------------- the log and the controls
-const LOG = D.log; let logShown = -1;
-function showLog() {
-  let i = -1; for (let j = 0; j < LOG.length; j++) if (LOG[j][0] <= t) i = j;
-  if (i === logShown) return; logShown = i;
-  $('log').innerHTML = LOG.slice(Math.max(0, i - 2), i + 1).map(([m, s]) => `<div><b>${hm(m).slice(0, 5)}</b> ${s}</div>`).join('');
+// ---------------------------------------------------------------- the interface (ui.js)
+const MOMENTS = [['00:00', 'Midnight'], ['02:12', 'The rain'], ['03:16:30', 'The cat'], ['05:20', 'Kitchens'], ['06:34', 'Lamps off'], ['07:12:30', 'Sun in the slot']];
+const syncUI = () => { U.setPlaying(playing); U.setSpeed(speed); };
+const U = await ui({
+  end: END, log: D.log, canvas: () => renderer.domElement, crosshair: !PHONE,
+  speeds: [[1, '1×'], [10, '10×'], [60, '60×'], [240, '240×']],
+  moments: MOMENTS.map(([s, l]) => ({ t: T(s), label: l })),
+  onMoment: i => { t = T(MOMENTS[i][0]); lastPaint = -1; U.refreshTicker(); },
+  onScrub: v => { t = v; lastPaint = -1; },
+  onPlay: () => { playing = !playing; syncUI(); },
+  onSpeed: s => { speed = s; syncUI(); },
+  beforeCapture: () => { applyTime(); draw(); },
+  help: PHONE ? '' : '<b>W A S D</b> walk · <b>shift</b> run<br><b>space</b> pause · <b>C</b> photo · <b>R</b> record<br>look at a lit window to meet who lives there',
+});
+window.__ui = U;
+function stateLine(t) {
+  if (raining(t)) return 'Raining. Everyone has decided not to go out.';
+  if (t >= 432 && t < 444) return 'The sun is lined up with the street.';
+  if (t >= 394 && lampsOn(t) === false && t < 432) return 'Morning. The lamps have clocked out.';
+  if (t < 60) return 'Just after midnight. The block is still deciding.';
+  if (t < 240) return 'The quiet hours. Every sound is somebody.';
+  if (t < 330) return 'The early shift is up. The late shift is not down yet.';
+  return 'The block is waking up, one window at a time.';
 }
-function syncUI() {
-  $('play').textContent = playing ? 'pause' : 'play';
-  document.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', +b.dataset.s === speed));
-}
-const ctl = $('ctl');
-SPEEDS.forEach(([s, l]) => { const b = document.createElement('button'); b.dataset.s = s; b.textContent = l; b.onclick = () => { speed = s; syncUI(); }; ctl.insertBefore(b, $('nb')); });
-$('play').onclick = () => { playing = !playing; syncUI(); };
-const MOMENTS = [['00:00', 'midnight'], ['02:12', 'the rain'], ['03:16:30', 'the cat'], ['05:20', 'kitchens'], ['06:34', 'lamps off'], ['07:12:30', 'sun in the slot']];
-for (const [s, l] of MOMENTS) { const b = document.createElement('button'); b.textContent = s.slice(0, 5) + ' ' + l; b.onclick = () => { t = T(s); lastPaint = -1; logShown = -2; }; $('moments').appendChild(b); }
-const bar = $('scrub');
-bar.addEventListener('input', () => { t = +bar.value; lastPaint = -1; });
 syncUI();
 
 // ---------------------------------------------------------------- go
 $('loading').classList.add('done'); setTimeout(() => $('loading').remove(), 900);
-let last = performance.now();
+let last = performance.now(), stTick = 9;
 function frame(now) {
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
   if (playing) { t += dt * speed / 60; if (t >= END) t = 0; }
@@ -347,8 +376,8 @@ function frame(now) {
     for (let i = 0; i < a.length; i += 6) { a[i + 1] -= fall; a[i + 4] -= fall; if (a[i + 4] < 0) { a[i + 1] += 18; a[i + 4] += 18; } } rain.geometry.attributes.position.needsUpdate = true; }
   skyDome.position.copy(camera.position);
   if ((lookTick += dt) > 0.2) { lookTick = 0; lookAtWindow(); }
-  $('clock').textContent = hm(t).slice(0, speed >= 60 ? 5 : 8); bar.value = t; showLog();
-  renderer.render(scene, camera);
+  U.setTime(t, { seconds: speed < 60 }); if ((stTick += dt) > 0.5) { stTick = 0; U.setState(stateLine(t)); }
+  draw();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -372,4 +401,4 @@ async function pano(W = 2048) {
   renderer.setPixelRatio(pr); renderer.setSize(keep.x, keep.y, false); rt.dispose(); m.dispose();
   return url;
 }
-window.__walk = { THREE, MV, pano, get t() { return t; }, set t(v) { t = v; lastPaint = -1; }, camera, renderer, scene, render: () => { applyTime(); placeMovers(0); renderer.render(scene, camera); }, setView(x, y, yw, pt) { camera.position.copy(v3(x, y, 1.62 + ((Math.abs(y) > ROAD) ? GROUND : 0))); yaw = yw; pitch = pt || 0; camera.rotation.set(pitch, yaw, 0); } };
+window.__walk = { THREE, MV, pano, get t() { return t; }, set t(v) { t = v; lastPaint = -1; }, camera, renderer, scene, render: () => { applyTime(); placeMovers(0); draw(); }, setView(x, y, yw, pt) { camera.position.copy(v3(x, y, 1.62 + ((Math.abs(y) > ROAD) ? GROUND : 0))); yaw = yw; pitch = pt || 0; camera.rotation.set(pitch, yaw, 0); } };

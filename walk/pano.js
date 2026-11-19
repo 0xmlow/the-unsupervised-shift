@@ -1,28 +1,34 @@
 // THE UNSUPERVISED SHIFT, the walk for browsers without WebGL.
-// The same block, photographed from the real walk: 360 views every 8 metres along both sidewalks at five moments
-// of the night (tools/panos.mjs). Drawn with plain canvas pixels, so it runs anywhere a page runs.
-const BASE = window.WALK_BASE || '', A = BASE + 'assets/';
+// The same block rendered in Cycles in 360 (tools/pano_render.py): every 8 metres along both sidewalks at five moments
+// of the night. Drawn with plain canvas pixels, so it runs anywhere a page runs. The interface is ui.js (Nov 19).
+const BASE = window.WALK_BASE || '', A = BASE + 'assets/', VQ = window.WALK_V ? '?v=' + window.WALK_V : '';
 const $ = id => document.getElementById(id);
-for (const id of ['help', 'moments', 'ctl', 'cross', 'scrub']) { const e = $(id); if (e) e.style.display = 'none'; }
-const P = await (await fetch(A + 'pano/panos.json')).json();
-const D = await (await fetch(A + 'block.json')).json().catch(() => null);
+const P = await (await fetch(A + 'pano/panos.json' + VQ)).json();
+const PHONE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
+const D = await (await fetch(A + 'block.json' + VQ)).json().catch(() => null);
 const T = s => { const [h, m, sec] = s.split(':').map(Number); return h * 60 + m + (sec || 0) / 60; };
 
-const old = $('c'), cv = old.cloneNode(); old.replaceWith(cv); const ctx = cv.getContext('2d', { willReadFrequently: false });
-const ui = document.createElement('div');
-ui.innerHTML = `<style>@media (max-width:700px){#pnote{display:none}#pctl button,#pctl a.b{font-size:10px;padding:3px 5px}#pctl{max-width:58vw!important}#pbar button{font-size:11px;padding:6px 8px}#log{bottom:64px!important}}</style><div id="pnote" style="position:fixed;left:16px;right:16px;top:74px;max-width:520px;font-size:11px;opacity:.75;pointer-events:none">This browser has no WebGL, so this is the photographed walk: the block rendered in Cycles, in 360, every eight metres, at five moments of the night. Drag to look. Click or tap to step where you look.</div>
-<div id="pctl" style="position:fixed;right:12px;top:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:62vw"></div>
-<div id="pwait" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-size:11px;opacity:0;transition:opacity .3s;pointer-events:none;background:rgba(13,13,13,.6);padding:4px 8px;border-radius:3px">sharpening</div><div id="pbar" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:8px;white-space:nowrap"><button id="pback">step back</button><button id="pfwd">step forward</button><button id="pcross">cross the street</button></div>`;
-document.body.appendChild(ui);
-for (const m of P.moments) { const b = document.createElement('button'); b.textContent = m.t.slice(0, 5) + ' ' + m.l; b.dataset.k = m.k; b.onclick = () => go(node, m.k); $('pctl').appendChild(b); }
-const a = document.createElement('a'); a.className = 'b'; a.href = '/shift'; a.target = '_top'; a.textContent = 'the piece'; $('pctl').appendChild(a);
-
+const old = $('c'), cv = old.cloneNode(); old.replaceWith(cv); const ctx = cv.getContext('2d');
+const V = window.WALK_V || '';
+const { mountUI } = await import('./ui.js' + (V ? '?v=' + V : ''));
+const MOM = P.moments.map(m => ({ k: m.k, t: T(m.t), label: { '0030': 'Half past midnight', '0240': 'The rain', '0317': 'The cat crosses', '0520': 'Kitchens', '0713': 'Sun in the slot' }[m.k] || m.l }));
+const STATE = { '0030': 'Just after midnight. The block is still deciding.', '0240': 'Raining. Everyone has decided not to go out.', '0317': 'The quiet hours. The cat has right of way.',
+  '0520': 'The early shift is up. The late shift is not down yet.', '0713': 'The sun is lined up with the street.' };
+window.__uiP = () => U;
+const nearestMoment = t => MOM.reduce((b, m) => Math.abs(m.t - t) < Math.abs(b.t - t) ? m : b, MOM[0]);
+const U = await mountUI({
+  end: 480, log: D ? D.log : [], canvas: () => cv,
+  moments: MOM, onMoment: i => go(node, MOM[i].k),
+  onScrub: (t, done) => { if (done) go(node, nearestMoment(t).k); },
+  onStep: d => step(d), onCross: () => cross(),
+  help: PHONE ? '' : '<b>drag</b> look · <b>click</b> step where you look<br><b>W S</b> step · <b>C</b> photo · <b>R</b> record<br>photographed in Cycles, in 360, every eight metres',
+});
+window.__ui = U;
 let node = P.nodes[1], moment = '0317', yaw = Math.PI / 2, pitch = 0, src = null;
-const PHONE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
 const imgs = new Map();           // compressed images only; the one we stand in is decoded to pixels
 function image(dir, key) {
   const k = dir + key; if (imgs.has(k)) return imgs.get(k);
-  const pr = new Promise((ok, no) => { const im = new Image(); im.decoding = 'async'; im.onload = () => ok(im); im.onerror = no; im.src = A + dir + '/' + key + '.jpg'; });
+  const pr = new Promise((ok, no) => { const im = new Image(); im.decoding = 'async'; im.onload = () => ok(im); im.onerror = no; im.src = A + dir + '/' + key + '.jpg' + VQ; });
   imgs.set(k, pr); if (imgs.size > 40) imgs.delete(imgs.keys().next().value); return pr;
 }
 function pixels(im) {
@@ -69,16 +75,12 @@ const resize = () => { fast = false; draw(); };
 let goId = 0;
 async function go(nd, k) {
   const id = ++goId, key = k + '_' + nd.id, m = P.moments.find(x => x.k === k);
-  $('pwait').style.opacity = 1;
+  U.say('DEVELOPING');
   const small = await image('pano_s', key); if (id !== goId) return;
   node = nd; moment = k; src = pixels(small); fast = false; draw();
-  $('clock').textContent = m.t.slice(0, 5);
-  document.querySelectorAll('#pctl button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
-  if (D) { const t = T(m.t); let i = -1; for (let j = 0; j < D.log.length; j++) if (D.log[j][0] <= t) i = j;
-    $('log').innerHTML = D.log.slice(Math.max(0, i - 1), i + 1).map(([mm, s]) => `<div><b>${String(Math.floor(mm / 60)).padStart(2, '0')}:${String(Math.floor(mm % 60)).padStart(2, '0')}</b> ${s}</div>`).join(''); }
+  U.setTime(T(m.t), { seconds: false }); U.setMoment(MOM.findIndex(x => x.k === k)); U.setState(STATE[k]);
   for (const n2 of P.nodes) if (Math.hypot(n2.x - nd.x, n2.y - nd.y) < 13) image('pano_s', k + '_' + n2.id);       // the next steps, ahead of time
   if (!PHONE) { const big = await image('pano', key).catch(() => null); if (big && id === goId) { src = pixels(big); draw(); } }
-  if (id === goId) $('pwait').style.opacity = 0;
 }
 function step(dir) {       // the nearest node within 45 degrees of where you look (or behind you)
   const ly = yaw + (dir < 0 ? Math.PI : 0); let best = null, bd = 1e9;
@@ -87,7 +89,6 @@ function step(dir) {       // the nearest node within 45 degrees of where you lo
   if (best) go(best, moment);
 }
 function cross() { const n2 = P.nodes.reduce((b, n) => (Math.sign(n.y) !== Math.sign(node.y) && (!b || Math.abs(n.x - node.x) < Math.abs(b.x - node.x))) ? n : b, null); if (n2) { yaw = Math.atan2(0, n2.y - node.y); go(n2, moment); } }
-$('pfwd').onclick = () => step(1); $('pback').onclick = () => step(-1); $('pcross').onclick = cross;
 let drag = null, moved = 0;
 cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; moved = 0; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; moved += Math.abs(dx) + Math.abs(dy);
